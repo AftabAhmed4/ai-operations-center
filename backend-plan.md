@@ -77,9 +77,9 @@ This document outlines the implementation plan for the backend of the NexusForge
 - **Dependencies**: `fastapi`, `sqlalchemy`, `pymysql`, `alembic`, `pandas`, `numpy`.
 - **APIs**: None directly (foundation for next phases).
 - **Testing Checklist**:
-  - [ ] Migrations run successfully against MySQL.
-  - [ ] Seed data populates correctly.
-  - [ ] Pandas service correctly generates regional summaries without exposing raw tables.
+  - [x] Migrations run successfully against MySQL.
+  - [x] Seed data populates correctly.
+  - [x] Pandas service correctly generates regional summaries without exposing raw tables.
 
 ### Phase 2: Standard Operations APIs (No AI Yet)
 **Objective**: Establish the core operational endpoints to power the mobile dashboard and sales features.
@@ -92,8 +92,8 @@ This document outlines the implementation plan for the backend of the NexusForge
   - `POST /api/v1/sales` (Contains inventory deduction logic)
   - `GET /api/v1/campaigns`
 - **Testing Checklist**:
-  - [ ] Creating a sale automatically reduces the correct inventory location.
-  - [ ] Dashboard metrics reflect accurate numbers.
+  - [x] Creating a sale automatically reduces the correct inventory location.
+  - [x] Dashboard metrics reflect accurate numbers.
 
 ### Phase 3: AI Agents & Tooling Framework
 **Objective**: Build the multi-agent system utilizing the Gemini API and Google ADK.
@@ -105,8 +105,8 @@ This document outlines the implementation plan for the backend of the NexusForge
 - **Files Involved**: `app/agents/*.py`, `app/tools/*.py`, `app/core/guardrails.py`.
 - **Dependencies**: `google-genai` (or equivalent ADK), `pydantic`.
 - **Testing Checklist**:
-  - [ ] Guardrails effectively block out-of-scope requests (e.g., prompt injection).
-  - [ ] Agents output perfectly structured JSON matching Pydantic schemas.
+  - [x] Guardrails effectively block out-of-scope requests (e.g., prompt injection).
+  - [x] Agents output perfectly structured JSON matching Pydantic schemas.
 
 ### Phase 4: Operations Center Workflow & State Management
 **Objective**: Connect the agents into a linear workflow pipeline with approval gates.
@@ -117,9 +117,9 @@ This document outlines the implementation plan for the backend of the NexusForge
   - `GET /api/v1/workflows/{id}/status`
   - `POST /api/v1/workflows/{id}/approve`
 - **Testing Checklist**:
-  - [ ] System stops and persists state when requiring human approval.
-  - [ ] Approval correctly resumes the process and mutates the database.
-  - [ ] Dashboard metrics update immediately post-execution.
+  - [x] System stops and persists state when requiring human approval.
+  - [x] Approval correctly resumes the process and mutates the database.
+  - [x] Dashboard metrics update immediately post-execution.
 
 ### Phase 5: Live Workflow Tracing (SSE)
 **Objective**: Stream real-time logs to the frontend as the agents think and execute.
@@ -127,8 +127,8 @@ This document outlines the implementation plan for the backend of the NexusForge
 - **Files Involved**: `app/streaming/sse_manager.py`, `app/api/v1/streaming.py`.
 - **APIs**: `GET /api/v1/streaming/workflow/{id}`
 - **Testing Checklist**:
-  - [ ] Frontend can connect and receive distinct streaming steps ("Parsing input...", "Analyzing inventory...", "Awaiting approval").
-  - [ ] Connection cleanly closes when the workflow ends or pauses.
+  - [x] Frontend can connect and receive distinct streaming steps ("Parsing input...", "Analyzing inventory...", "Awaiting approval").
+  - [x] Connection cleanly closes when the workflow ends or pauses.
 
 ---
 
