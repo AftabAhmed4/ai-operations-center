@@ -88,9 +88,9 @@ This document outlines the detailed implementation plan for the mobile frontend 
 - **Screens/Components**: `TabNavigator`, `ScreenWrapper`, `Button`, `Card`, `Badge`.
 - **Frontend State**: None yet.
 - **Testing Checklist**:
-  - [ ] App loads without crashing.
-  - [ ] Tabs navigate smoothly between empty screens.
-  - [ ] NativeWind utility classes apply correctly.
+  - [x] App loads without crashing.
+  - [x] Tabs navigate smoothly between empty screens.
+  - [x] NativeWind utility classes apply correctly.
 
 ### Module 2: Dashboard UI
 - **Objective**: Build the operational overview with mocked analytics data.
@@ -99,9 +99,9 @@ This document outlines the detailed implementation plan for the mobile frontend 
 - **APIs Required**: `GET /api/v1/dashboard/metrics` (Mocked).
 - **State**: TanStack Query `useQuery` for metrics.
 - **Testing Checklist**:
-  - [ ] Metric cards scroll horizontally smoothly.
-  - [ ] Refreshing the screen refetches TanStack Query.
-  - [ ] Loading skeletons appear while fetching data.
+  - [x] Metric cards scroll horizontally smoothly.
+  - [x] Refreshing the screen refetches TanStack Query.
+  - [x] Loading skeletons appear while fetching data.
 
 ### Module 3: Products & Campaigns
 - **Objective**: Implement the core inventory and promotional views.
@@ -110,8 +110,8 @@ This document outlines the detailed implementation plan for the mobile frontend 
 - **APIs Required**: `GET /api/v1/products`, `GET /api/v1/campaigns` (Mocked).
 - **State**: Local component state for search/filters. TanStack Query for lists.
 - **Testing Checklist**:
-  - [ ] Lists render correctly with badges.
-  - [ ] Filter chips toggle data correctly.
+  - [x] Lists render correctly with badges.
+  - [x] Filter chips toggle data correctly.
 
 ### Module 4: Operations Center (HIGHEST PRIORITY)
 - **Objective**: Build the "Mission Control" for the AI, demonstrating unstructured input, thinking, and simulated execution.

@@ -5,7 +5,7 @@ from datetime import datetime
 class InventoryBase(BaseModel):
     city: str
     quantity: int
-    low_stock_threshold: int
+    low_stock_threshold: int = 5
 
 class InventoryResponse(InventoryBase):
     id: int
@@ -18,6 +18,15 @@ class ProductBase(BaseModel):
     base_price: float
     category: str
 
+class ProductCreate(ProductBase):
+    inventory: List[InventoryBase] = []
+
+class ProductUpdate(BaseModel):
+    name: Optional[str] = None
+    sku: Optional[str] = None
+    base_price: Optional[float] = None
+    category: Optional[str] = None
+
 class ProductResponse(ProductBase):
     id: int
     ai_updated_at: Optional[datetime] = None
@@ -26,3 +35,4 @@ class ProductResponse(ProductBase):
 
 class ProductPriceUpdate(BaseModel):
     new_price: float
+
