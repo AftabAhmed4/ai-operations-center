@@ -17,6 +17,9 @@ export const productsApi = {
 
 export const campaignsApi = {
   getAll: () => apiClient.get('/api/v1/campaigns').then(r => r.data),
+  create: (data: any) => apiClient.post('/api/v1/campaigns', data).then(r => r.data),
+  update: (id: number, data: any) => apiClient.put(`/api/v1/campaigns/${id}`, data).then(r => r.data),
+  delete: (id: number) => apiClient.delete(`/api/v1/campaigns/${id}`),
 };
 
 export const workflowsApi = {
