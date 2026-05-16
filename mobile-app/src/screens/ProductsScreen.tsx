@@ -338,9 +338,9 @@ const NoData = ({ message }: { message: string }) => (
 
 const STATUS_FILTERS = [
   { key: 'All', label: 'All Status' },
-  { key: 'healthy', label: '✓ Healthy' },
-  { key: 'low_stock', label: '⚠ Low Stock' },
-  { key: 'out_of_stock', label: '✗ Out of Stock' },
+  { key: 'healthy', label: 'Healthy' },
+  { key: 'low_stock', label: 'Low Stock' },
+  { key: 'out_of_stock', label: 'Out of Stock' },
 ];
 
 export const ProductsScreen = () => {
@@ -372,6 +372,9 @@ export const ProductsScreen = () => {
       return matchSearch && matchCat && matchStatus;
     });
   }, [data, search, activeCategory, activeStatus]);
+
+  console.log('data', data);
+
 
   const handleEdit = (product: Product) => {
     setEditProduct(product);

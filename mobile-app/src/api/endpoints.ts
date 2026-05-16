@@ -15,6 +15,11 @@ export const productsApi = {
   delete: (id: number) => apiClient.delete(`/api/v1/products/${id}`),
 };
 
+export const salesApi = {
+  getAll: () => apiClient.get('/api/v1/sales').then(r => r.data),
+  create: (data: any) => apiClient.post('/api/v1/sales', data).then(r => r.data),
+};
+
 export const campaignsApi = {
   getAll: () => apiClient.get('/api/v1/campaigns').then(r => r.data),
   create: (data: any) => apiClient.post('/api/v1/campaigns', data).then(r => r.data),

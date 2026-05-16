@@ -2,6 +2,7 @@ import React from 'react';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { NativeWindStyleSheet } from "nativewind";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 NativeWindStyleSheet.setOutput({
   default: "native",
@@ -18,8 +19,10 @@ const queryClient = new QueryClient({
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <RootNavigator />
-    </QueryClientProvider>
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <RootNavigator />
+      </QueryClientProvider>
+    </SafeAreaProvider>
   );
 }

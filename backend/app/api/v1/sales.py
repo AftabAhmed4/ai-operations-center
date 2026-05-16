@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+from sqlalchemy import desc
+from typing import List
 
 from app.db.database import get_db
 from app.db.models import Sale, SaleItem, Product
@@ -9,6 +11,13 @@ from app.schemas.sale import SaleCreate, SaleResponse
 from app.services.inventory import reduce_inventory
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
+
+@router.get("/", response_model=List[SaleResponse])
+async def get_sales(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Sale).options(selectinload(Sale.items)).order_by(desc(Sale.created_at))
+    )
+    return result.scalars().all()
 
 @router.post("/", response_model=SaleResponse)
 async def create_sale(sale_data: SaleCreate, db: AsyncSession = Depends(get_db)):
