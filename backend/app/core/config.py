@@ -8,8 +8,7 @@ class Settings(BaseSettings):
     DB_USER: str
     DB_PASSWORD: str
     DB_NAME: str
-    CLOUD_SQL_CONNECTION_NAME: str
-    GEMINI_API_KEY: str
+    GEMINI_API_KEY: str = None
 
     @property
     def DATABASE_URL(self) -> str:
