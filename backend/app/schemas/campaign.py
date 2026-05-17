@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import Optional, Union
 
 class CampaignCreate(BaseModel):
     name: str
@@ -18,7 +18,7 @@ class CampaignUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 class CampaignResponse(CampaignCreate):
-    id: int
+    id: Union[int, str]
     is_active: bool
     model_config = ConfigDict(from_attributes=True)
 

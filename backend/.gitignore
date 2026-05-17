@@ -1,1 +1,28 @@
 .env
+
+# ─── Python / Backend ────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+.venv/
+venv/
+.Python
+*.egg-info/
+dist/
+build/
+*.so
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# ─── uv ─────────────────────────────────────────────────────────────────────
+.uv/
+
+# ─── Alembic ─────────────────────────────────────────────────────────────────
+# Keep migrations, but not local SQLite test DBs
+*.db
+*.sqlite3

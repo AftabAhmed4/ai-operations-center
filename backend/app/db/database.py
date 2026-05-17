@@ -1,29 +1,35 @@
-import ssl
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.orm import declarative_base
+import os
+import firebase_admin
+from firebase_admin import credentials, firestore
 from app.core.config import settings
 
-# Create a secure SSL context that doesn't require a certificate file
-ssl_context = ssl.create_default_context()
-ssl_context.check_hostname = False
-ssl_context.verify_mode = ssl.CERT_NONE
+def init_firebase():
+    if not firebase_admin._apps:
+        cred_path = settings.FIREBASE_SERVICE_ACCOUNT_KEY
+        
+        if cred_path:
+            # If the path is relative, ensure it's evaluated relative to the backend directory
+            if not os.path.isabs(cred_path):
+                # Assume the backend directory is the root
+                backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                cred_path = os.path.join(backend_dir, cred_path)
+                
+            if os.path.exists(cred_path):
+                cred = credentials.Certificate(cred_path)
+                firebase_admin.initialize_app(cred)
+                print(f"Firebase initialized successfully with credentials from {cred_path}")
+            else:
+                print(f"Warning: Firebase credential file not found at {cred_path}. Attempting to use default credentials.")
+                try:
+                    firebase_admin.initialize_app()
+                except Exception as e:
+                    raise RuntimeError(f"Failed to initialize Firebase. Checked path {cred_path} but it didn't exist. Error: {e}")
+        else:
+            print("No FIREBASE_SERVICE_ACCOUNT_KEY provided. Attempting to use default credentials.")
+            firebase_admin.initialize_app()
 
-# Create async engine for MySQL with the SSL context
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=True,
-    connect_args={"ssl": ssl_context}
-)
+init_firebase()
 
-# Create async session factory
-AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False
-)
-
-Base = declarative_base()
-
-async def get_db():
-    async with AsyncSessionLocal() as session:
-        yield session
+def get_db():
+    db = firestore.client()
+    yield db

@@ -1,36 +1,51 @@
 import pandas as pd
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from app.db.models import Sale, SaleItem, Product, Inventory
+from google.cloud import firestore
 
-async def get_regional_sales_summary(db: AsyncSession) -> str:
+def get_regional_sales_summary(db: firestore.Client) -> str:
     """
     Fetches all sales and uses Pandas to group them by region.
     Returns a summarized JSON string to feed to the Insight Agent.
     """
-    result = await db.execute(select(Sale.city, Sale.total_amount, Sale.type))
-    sales = result.all()
+    sales_docs = db.collection("sales").stream()
+    sales_data = []
     
-    if not sales:
+    for doc in sales_docs:
+        data = doc.to_dict()
+        sales_data.append({
+            "city": data.get("city", "Unknown"),
+            "total_amount": data.get("total_amount", 0.0),
+            "type": data.get("type", "Unknown")
+        })
+        
+    if not sales_data:
         return '{"message": "No sales data available"}'
         
-    df = pd.DataFrame(sales, columns=["city", "total_amount", "type"])
+    df = pd.DataFrame(sales_data, columns=["city", "total_amount", "type"])
     summary = df.groupby(["city", "type"])["total_amount"].sum().unstack(fill_value=0)
     
     # Calculate total revenue per city
     summary['Total Revenue'] = summary.sum(axis=1)
     return summary.to_json(orient='index')
 
-async def get_low_stock_summary(db: AsyncSession) -> str:
+def get_low_stock_summary(db: firestore.Client) -> str:
     """
     Fetches inventory and uses Pandas to identify low stock products per city.
     """
-    result = await db.execute(
-        select(Inventory.city, Inventory.quantity, Inventory.low_stock_threshold, Product.name)
-        .join(Product, Inventory.product_id == Product.id)
-    )
-    inventory_items = result.all()
+    products_docs = db.collection("products").stream()
+    inventory_items = []
     
+    for doc in products_docs:
+        product = doc.to_dict()
+        product_name = product.get("name", "Unknown")
+        
+        for inv in product.get("inventory", []):
+            inventory_items.append({
+                "city": inv.get("city", "Unknown"),
+                "quantity": inv.get("quantity", 0),
+                "low_stock_threshold": inv.get("low_stock_threshold", 5),
+                "product_name": product_name
+            })
+            
     if not inventory_items:
         return '{"message": "No inventory data available"}'
         
