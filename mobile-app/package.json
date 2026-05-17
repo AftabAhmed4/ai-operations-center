@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~6.1.2",
     "@react-navigation/bottom-tabs": "^7.16.1",
     "@react-navigation/native": "^7.2.4",
     "@react-navigation/native-stack": "^7.15.1",
@@ -20,6 +21,7 @@
     "moti": "^0.30.0",
     "nativewind": "^2.0.11",
     "react": "19.1.0",
+    "react-dom": "19.1.0",
     "react-native": "0.81.5",
     "react-native-gifted-charts": "^1.4.76",
     "react-native-linear-gradient": "^2.8.3",
@@ -27,12 +29,13 @@
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
+    "react-native-web": "^0.21.0",
     "tailwindcss": "3.3.2",
     "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
-    "babel-preset-expo": "^55.0.21",
+    "babel-preset-expo": "~54.0.10",
     "typescript": "~5.9.2"
   },
   "private": true

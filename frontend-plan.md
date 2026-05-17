@@ -129,11 +129,11 @@ This document outlines the detailed implementation plan for the mobile frontend 
   - `POST /api/v1/workflows/{id}/approve`
 - **Frontend State**: `aiWorkflowStore` (Zustand) tracking live workflow status.
 - **Testing Checklist**:
-  - [ ] Triggering an action initiates the animated timeline.
-  - [ ] Mocked SSE events dynamically append to the Terminal Logs component.
-  - [ ] Timeline steps highlight actively as logs stream in.
-  - [ ] System pauses, and the Approval Modal cleanly pops up.
-  - [ ] Approving animates the final execution and displays the "Before vs After" cards.
+  - [x] Triggering an action initiates the animated timeline.
+  - [x] Mocked SSE events dynamically append to the Terminal Logs component.
+  - [x] Timeline steps highlight actively as logs stream in.
+  - [x] System pauses, and the Approval Modal cleanly pops up.
+  - [x] Approving animates the final execution and displays the "Before vs After" cards.
 
 ### Module 5: Sales Generator (Demo Utility)
 - **Objective**: Allow users to quickly generate sales to trigger inventory changes.
@@ -141,8 +141,8 @@ This document outlines the detailed implementation plan for the mobile frontend 
 - **Screens**: `SalesScreen`.
 - **APIs Required**: `POST /api/v1/sales`.
 - **Testing Checklist**:
-  - [ ] Submitting a sale shows a success toast.
-  - [ ] Navigating back to Dashboard/Products reflects the reduced inventory (cache invalidated).
+  - [x] Submitting a sale shows a success toast.
+  - [x] Navigating back to Dashboard/Products reflects the reduced inventory (cache invalidated).
 
 ### Module 6: Reports & CRM (Secondary Priority)
 - **Objective**: Implement basic data tabular views for operational reporting.

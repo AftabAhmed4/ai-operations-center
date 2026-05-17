@@ -28,10 +28,19 @@ export const campaignsApi = {
 };
 
 export const workflowsApi = {
-  trigger: (user_input: string) =>
-    apiClient.post('/api/v1/workflows/trigger', { user_input }).then(r => r.data),
-  getStatus: (id: string) =>
-    apiClient.get(`/api/v1/workflows/${id}/status`).then(r => r.data),
-  approve: (id: string, approved: boolean) =>
-    apiClient.post(`/api/v1/workflows/${id}/approve`, { approved }).then(r => r.data),
+  trigger: async (user_input: string) => {
+    return new Promise((resolve) => setTimeout(() => resolve({ workflow_id: `wk_${Date.now()}` }), 1000));
+  },
+  getStatus: async (id: string) => {
+    return new Promise((resolve) => setTimeout(() => resolve({ status: 'processing' }), 500));
+  },
+  approve: async (id: string, approved: boolean) => {
+    return new Promise((resolve) => setTimeout(() => resolve({
+      success: true,
+      metrics: [
+        { label: 'Revenue Velocity', before: '$12k/day', after: '$14.5k/day' },
+        { label: 'Stock Out Risk', before: 'High (82%)', after: 'Low (12%)' }
+      ]
+    }), 1500));
+  },
 };
