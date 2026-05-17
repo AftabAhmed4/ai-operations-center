@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Union
 
 class DashboardMetrics(BaseModel):
     total_revenue: float
@@ -17,7 +17,7 @@ class MonthlySalesResponse(BaseModel):
     selected_month: Optional[str] = None
 
 class LowStockItem(BaseModel):
-    product_id: int
+    product_id: Union[int, str]
     product_name: str
     sku: str
     city: str
@@ -28,7 +28,7 @@ class LowStockResponse(BaseModel):
     items: List[LowStockItem]
 
 class HighDemandItem(BaseModel):
-    product_id: int
+    product_id: Union[int, str]
     product_name: str
     sku: str
     category: str

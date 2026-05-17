@@ -8,8 +8,8 @@ class InventoryBase(BaseModel):
     low_stock_threshold: int = 5
 
 class InventoryResponse(InventoryBase):
-    id: int
-    product_id: int
+    id: str | int
+    product_id: str | int
     model_config = ConfigDict(from_attributes=True)
 
 class ProductBase(BaseModel):
@@ -28,7 +28,7 @@ class ProductUpdate(BaseModel):
     category: Optional[str] = None
 
 class ProductResponse(ProductBase):
-    id: int
+    id: str | int
     ai_updated_at: Optional[datetime] = None
     inventory: List[InventoryResponse] = []
     model_config = ConfigDict(from_attributes=True)

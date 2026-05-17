@@ -1,10 +1,8 @@
 import json
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from google.cloud import firestore
 from app.schemas.agents import DecisionAction
-from app.db.models import Product, Campaign, Inventory
 
-async def execute_action(db: AsyncSession, action: DecisionAction) -> str:
+async def execute_action(db: firestore.Client, action: DecisionAction) -> str:
     """
     Translates the Pydantic JSON decisions into database mutations.
     Returns a success message.
@@ -17,42 +15,69 @@ async def execute_action(db: AsyncSession, action: DecisionAction) -> str:
         product_name = details.get('product_name')
         new_price = details.get('new_price')
         
-        result = await db.execute(select(Product).where(Product.name.ilike(f"%{product_name}%")))
-        product = result.scalars().first()
-        
-        if product and new_price:
-            product.base_price = float(new_price)
-            await db.commit()
-            return f"Updated price for {product.name} to {new_price}."
+        # Find product by name
+        products_docs = db.collection("products").stream()
+        product_ref = None
+        for doc in products_docs:
+            if product_name and product_name.lower() in doc.to_dict().get("name", "").lower():
+                product_ref = doc.reference
+                break
+                
+        if product_ref and new_price is not None:
+            product_ref.update({"base_price": float(new_price)})
+            return f"Updated price for {product_name} to {new_price}."
         return "Product not found or missing details."
         
     elif action_type == 'create_campaign':
         # Expects: name, discount_percent, region
-        campaign = Campaign(
-            name=details.get('name', 'AI Auto Campaign'),
-            coupon_code=details.get('coupon_code', 'AI-SALE'),
-            discount_percent=float(details.get('discount_percent', 10.0)),
-            region=details.get('region', 'All'),
-            ai_generated=True,
-            projected_impact=action.justification
-        )
-        db.add(campaign)
-        await db.commit()
-        return f"Created campaign {campaign.name} for {campaign.region}."
+        campaign = {
+            "name": details.get('name', 'AI Auto Campaign'),
+            "coupon_code": details.get('coupon_code', 'AI-SALE'),
+            "discount_percent": float(details.get('discount_percent', 10.0)),
+            "region": details.get('region', 'All'),
+            "ai_generated": True,
+            "projected_impact": action.justification,
+            "is_active": True
+        }
+        
+        doc_ref = db.collection("campaigns").document()
+        campaign["id"] = doc_ref.id
+        doc_ref.set(campaign)
+        
+        return f"Created campaign {campaign['name']} for {campaign['region']}."
         
     elif action_type == 'reorder_stock':
         product_name = details.get('product_name')
         city = details.get('city')
         quantity = int(details.get('quantity', 50))
         
-        result = await db.execute(
-            select(Inventory).join(Product).where(Product.name.ilike(f"%{product_name}%"), Inventory.city == city)
-        )
-        inventory = result.scalars().first()
-        
-        if inventory:
-            inventory.quantity += quantity
-            await db.commit()
+        # Find product by name and update inventory
+        products_docs = db.collection("products").stream()
+        product_ref = None
+        inventory = []
+        for doc in products_docs:
+            data = doc.to_dict()
+            if product_name and product_name.lower() in data.get("name", "").lower():
+                product_ref = doc.reference
+                inventory = data.get("inventory", [])
+                break
+                
+        if product_ref:
+            found = False
+            for inv in inventory:
+                if inv.get("city") == city:
+                    inv["quantity"] += quantity
+                    found = True
+                    break
+            
+            if not found:
+                inventory.append({
+                    "city": city,
+                    "quantity": quantity,
+                    "low_stock_threshold": 5
+                })
+                
+            product_ref.update({"inventory": inventory})
             return f"Reordered {quantity} units of {product_name} for {city}."
             
         return "Inventory location not found."

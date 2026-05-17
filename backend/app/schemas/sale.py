@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict
-from typing import List, Optional
+from typing import List, Optional, Union
 from datetime import datetime
-from app.db.models import OrderType
+from app.schemas.enums import OrderType
 
 class SaleItemCreate(BaseModel):
     product_id: int
@@ -9,20 +9,20 @@ class SaleItemCreate(BaseModel):
     unit_price: float
 
 class SaleCreate(BaseModel):
-    customer_id: Optional[int] = None
+    customer_id: Optional[Union[int, str]] = None
     type: OrderType
     discount_applied: float = 0.0
     city: str
     items: List[SaleItemCreate]
 
 class SaleItemResponse(SaleItemCreate):
-    id: int
-    sale_id: int
+    id: Union[int, str]
+    sale_id: Union[int, str]
     model_config = ConfigDict(from_attributes=True)
 
 class SaleResponse(BaseModel):
-    id: int
-    customer_id: Optional[int]
+    id: Union[int, str]
+    customer_id: Optional[Union[int, str]]
     type: OrderType
     total_amount: float
     discount_applied: float

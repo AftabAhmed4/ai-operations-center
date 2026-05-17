@@ -1,12 +1,9 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy import func, extract
-from datetime import datetime
+from google.cloud import firestore
+from datetime import datetime, timezone
 from typing import Optional, List
 
 from app.db.database import get_db
-from app.db.models import Sale, SaleItem, Campaign, Inventory, Product
 from app.schemas.dashboard import (
     DashboardMetrics, MonthlySalesResponse, MonthlySalesPoint,
     LowStockResponse, LowStockItem, HighDemandResponse, HighDemandItem
@@ -18,24 +15,34 @@ MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 @router.get("/metrics", response_model=DashboardMetrics)
-async def get_dashboard_metrics(db: AsyncSession = Depends(get_db)):
-    revenue_result = await db.execute(select(func.sum(Sale.total_amount)))
-    total_revenue = revenue_result.scalar() or 0.0
+def get_dashboard_metrics(db: firestore.Client = Depends(get_db)):
+    # Total Revenue and Orders Today
+    sales_docs = list(db.collection("sales").stream())
+    total_revenue = 0.0
+    orders_today = 0
+    
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+    
+    for doc in sales_docs:
+        sale = doc.to_dict()
+        total_revenue += sale.get("total_amount", 0.0)
+        
+        created_at = sale.get("created_at", "")
+        if created_at.startswith(today_str):
+            orders_today += 1
 
-    orders_result = await db.execute(select(func.count(Sale.id)))
-    orders_today = orders_result.scalar() or 0
+    # Active Campaigns
+    campaigns_query = db.collection("campaigns").where(filter=firestore.FieldFilter("is_active", "==", True)).stream()
+    active_campaigns = len(list(campaigns_query))
 
-    campaigns_result = await db.execute(
-        select(func.count(Campaign.id)).filter(Campaign.is_active == True)
-    )
-    active_campaigns = campaigns_result.scalar() or 0
-
-    low_stock_result = await db.execute(
-        select(func.count(Inventory.id)).filter(
-            Inventory.quantity <= Inventory.low_stock_threshold
-        )
-    )
-    low_stock_alerts = low_stock_result.scalar() or 0
+    # Low Stock Alerts
+    products_docs = db.collection("products").stream()
+    low_stock_alerts = 0
+    for doc in products_docs:
+        product = doc.to_dict()
+        for inv in product.get("inventory", []):
+            if inv.get("quantity", 0) <= inv.get("low_stock_threshold", 5):
+                low_stock_alerts += 1
 
     return DashboardMetrics(
         total_revenue=total_revenue,
@@ -46,89 +53,110 @@ async def get_dashboard_metrics(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/monthly-sales", response_model=MonthlySalesResponse)
-async def get_monthly_sales(
+def get_monthly_sales(
     year: Optional[int] = Query(default=None),
-    db: AsyncSession = Depends(get_db)
+    db: firestore.Client = Depends(get_db)
 ):
     target_year = year or datetime.utcnow().year
+    
+    sales_docs = db.collection("sales").stream()
+    
+    monthly_data = {m: {"revenue": 0.0, "orders": 0} for m in range(1, 13)}
+    
+    for doc in sales_docs:
+        sale = doc.to_dict()
+        created_at_str = sale.get("created_at", "")
+        if not created_at_str: continue
+        
+        try:
+            created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+            if created_at.year == target_year:
+                m = created_at.month
+                monthly_data[m]["revenue"] += sale.get("total_amount", 0.0)
+                monthly_data[m]["orders"] += 1
+        except ValueError:
+            pass
 
-    result = await db.execute(
-        select(
-            extract("month", Sale.created_at).label("month"),
-            func.sum(Sale.total_amount).label("revenue"),
-            func.count(Sale.id).label("orders")
-        )
-        .filter(extract("year", Sale.created_at) == target_year)
-        .group_by(extract("month", Sale.created_at))
-        .order_by(extract("month", Sale.created_at))
-    )
-    rows = result.all()
-
-    # Build full 12-month array, filling zeros for missing months
-    monthly_map = {int(r.month): r for r in rows}
     data = []
     for m in range(1, 13):
-        r = monthly_map.get(m)
         data.append(MonthlySalesPoint(
             month=MONTH_NAMES[m - 1],
-            revenue=float(r.revenue) if r else 0.0,
-            orders=int(r.orders) if r else 0,
+            revenue=monthly_data[m]["revenue"],
+            orders=monthly_data[m]["orders"],
         ))
 
     return MonthlySalesResponse(data=data)
 
 
 @router.get("/low-stock", response_model=LowStockResponse)
-async def get_low_stock(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(Inventory, Product)
-        .join(Product, Inventory.product_id == Product.id)
-        .filter(Inventory.quantity <= Inventory.low_stock_threshold)
-        .order_by(Inventory.quantity.asc())
-    )
-    rows = result.all()
-
-    items = [
-        LowStockItem(
-            product_id=inv.product_id,
-            product_name=prod.name,
-            sku=prod.sku,
-            city=inv.city,
-            quantity=inv.quantity,
-            threshold=inv.low_stock_threshold,
-        )
-        for inv, prod in rows
-    ]
+def get_low_stock(db: firestore.Client = Depends(get_db)):
+    products_docs = db.collection("products").stream()
+    items = []
+    
+    for doc in products_docs:
+        product = doc.to_dict()
+        product_id = doc.id
+        product_name = product.get("name", "")
+        sku = product.get("sku", "")
+        
+        for inv in product.get("inventory", []):
+            quantity = inv.get("quantity", 0)
+            threshold = inv.get("low_stock_threshold", 5)
+            if quantity <= threshold:
+                items.append(LowStockItem(
+                    product_id=product_id,
+                    product_name=product_name,
+                    sku=sku,
+                    city=inv.get("city", ""),
+                    quantity=quantity,
+                    threshold=threshold
+                ))
+                
+    # Sort by quantity ascending
+    items.sort(key=lambda x: x.quantity)
+    
     return LowStockResponse(items=items)
 
 
 @router.get("/high-demand", response_model=HighDemandResponse)
-async def get_high_demand(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(
-            Product.id,
-            Product.name,
-            Product.sku,
-            Product.category,
-            func.sum(SaleItem.quantity).label("total_sold"),
-            func.sum(SaleItem.quantity * SaleItem.unit_price).label("total_revenue"),
-        )
-        .join(SaleItem, SaleItem.product_id == Product.id)
-        .group_by(Product.id, Product.name, Product.sku, Product.category)
-        .order_by(func.sum(SaleItem.quantity).desc())
-        .limit(10)
-    )
-    rows = result.all()
-
-    items = [
-        HighDemandItem(
-            product_id=r.id,
-            product_name=r.name,
-            sku=r.sku,
-            category=r.category,
-            total_sold=int(r.total_sold or 0),
-            total_revenue=float(r.total_revenue or 0.0),
-        )
-        for r in rows
-    ]
-    return HighDemandResponse(items=items)
+def get_high_demand(db: firestore.Client = Depends(get_db)):
+    sales_docs = db.collection("sales").stream()
+    products_docs = db.collection("products").stream()
+    
+    # Map product details
+    product_map = {}
+    for doc in products_docs:
+        product_map[doc.id] = doc.to_dict()
+        
+    # Aggregate sales
+    demand_map = {}
+    for doc in sales_docs:
+        sale = doc.to_dict()
+        for item in sale.get("items", []):
+            prod_id = str(item.get("product_id"))
+            quantity = item.get("quantity", 0)
+            unit_price = item.get("unit_price", 0.0)
+            
+            if prod_id not in demand_map:
+                demand_map[prod_id] = {"total_sold": 0, "total_revenue": 0.0}
+                
+            demand_map[prod_id]["total_sold"] += quantity
+            demand_map[prod_id]["total_revenue"] += (quantity * unit_price)
+            
+    # Build response
+    items = []
+    for prod_id, stats in demand_map.items():
+        prod_data = product_map.get(prod_id, {})
+        items.append(HighDemandItem(
+            product_id=prod_id,
+            product_name=prod_data.get("name", "Unknown"),
+            sku=prod_data.get("sku", "Unknown"),
+            category=prod_data.get("category", "Unknown"),
+            total_sold=stats["total_sold"],
+            total_revenue=stats["total_revenue"]
+        ))
+        
+    # Sort by total_sold descending
+    items.sort(key=lambda x: x.total_sold, reverse=True)
+    
+    return HighDemandResponse(items=items[:10])
