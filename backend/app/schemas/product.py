@@ -8,8 +8,8 @@ class InventoryBase(BaseModel):
     low_stock_threshold: int = 5
 
 class InventoryResponse(InventoryBase):
-    id: str | int
-    product_id: str | int
+    id: Optional[str | int] = None
+    product_id: Optional[str | int] = None
     model_config = ConfigDict(from_attributes=True)
 
 class ProductBase(BaseModel):
