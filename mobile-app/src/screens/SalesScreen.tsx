@@ -1,227 +1,486 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  View, Text, ScrollView, TouchableOpacity, TextInput, FlatList,
+  RefreshControl, Alert, Modal, ActivityIndicator, KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ShoppingCart, MapPin, Tag, Package, Store } from 'lucide-react-native';
+import {
+  Search, Plus, Pencil, Trash2, X, MapPin, Store, Calendar, FileText, Package, ShoppingCart
+} from 'lucide-react-native';
 import { ScreenWrapper } from '../components/layout/ScreenWrapper';
 import { productsApi, salesApi } from '../api/endpoints';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface SaleItem { product_id: number; quantity: number; unit_price: number; discount?: number; product?: any; }
+interface Sale { id: number; type: string; city: string; discount_applied: number; total_amount?: number; items: SaleItem[]; created_at?: string; }
+interface Product { id: number; name: string; sku: string; base_price: number; inventory: any[]; }
 
 const CITIES = ['Karachi', 'Lahore', 'Islamabad', 'Peshawar'];
 const ORDER_TYPES = ['Walk-in', 'Online Delivery'];
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const getTotalStock = (p: Product) => {
+  if (!p?.inventory) return 0;
+  return p.inventory.reduce((sum: number, i: any) => sum + (i.quantity || 0), 0);
+};
+
+// ─── Components ───────────────────────────────────────────────────────────────
+
+const NoData = ({ message }: { message: string }) => (
+  <View style={{ alignItems: 'center', paddingVertical: 48 }}>
+    <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+      <FileText size={32} color="#CBD5E1" />
+    </View>
+    <Text style={{ fontSize: 15, fontWeight: '700', color: '#94A3B8' }}>No Invoices Found</Text>
+    <Text style={{ fontSize: 12, color: '#CBD5E1', marginTop: 4 }}>{message}</Text>
+  </View>
+);
+
+const InputField = ({ label, value, onChangeText, placeholder, keyboardType = 'default' }: any) => (
+  <View style={{ marginBottom: 14 }}>
+    <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</Text>
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor="#CBD5E1"
+      keyboardType={keyboardType}
+      style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14, color: '#0F172A' }}
+    />
+  </View>
+);
+
+// ─── Product Selection Modal ──────────────────────────────────────────────────
+
+const ProductSelectionModal = ({ visible, onClose, onSelect, products }: { visible: boolean, onClose: () => void, onSelect: (p: Product) => void, products: Product[] }) => {
+  const [search, setSearch] = useState('');
+  
+  const filtered = useMemo(() => {
+    return products.filter(p => 
+      p.name.toLowerCase().includes(search.toLowerCase()) || 
+      p.sku.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [products, search]);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <View style={{ height: '80%', backgroundColor: '#F8FAFC', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' }}>
+          
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Select Product</Text>
+            <TouchableOpacity onPress={onClose} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
+              <X size={18} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={{ padding: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+              <Search size={15} color="#94A3B8" />
+              <TextInput
+                style={{ flex: 1, paddingVertical: 11, marginLeft: 8, fontSize: 13, color: '#0F172A' }}
+                placeholder="Search products..."
+                placeholderTextColor="#94A3B8"
+                value={search}
+                onChangeText={setSearch}
+              />
+            </View>
+          </View>
+
+          <FlatList
+            data={filtered}
+            keyExtractor={p => p.id.toString()}
+            contentContainerStyle={{ padding: 16, paddingTop: 0 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                onPress={() => onSelect(item)}
+                style={{ backgroundColor: '#FFF', padding: 16, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A' }}>{item.name}</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>SKU: {item.sku} · Stock: {getTotalStock(item)}</Text>
+                </View>
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#2563EB' }}>₨ {item.base_price}</Text>
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 20, color: '#94A3B8' }}>No products found.</Text>}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+// ─── Sales Form Modal ─────────────────────────────────────────────────────────
+
+const SalesFormModal = ({
+  visible, onClose, editSale, onSaved, products
+}: {
+  visible: boolean; onClose: () => void; editSale: Sale | null; onSaved: () => void; products: Product[];
+}) => {
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [orderType, setOrderType] = useState(ORDER_TYPES[0]);
+  const [city, setCity] = useState(CITIES[0]);
+  const [items, setItems] = useState<SaleItem[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [productModalVisible, setProductModalVisible] = useState(false);
+
+  const isEdit = !!editSale;
+
+  useEffect(() => {
+    if (editSale) {
+      setDate(editSale.created_at ? editSale.created_at.split('T')[0] : new Date().toISOString().split('T')[0]);
+      setOrderType(editSale.type);
+      setCity(editSale.city);
+      setItems(editSale.items.map(i => ({
+        ...i,
+        discount: 0, // In original model discount_applied was global, but we map it per item in UI for new additions.
+        product: products.find(p => p.id === i.product_id)
+      })));
+    } else {
+      setDate(new Date().toISOString().split('T')[0]);
+      setOrderType(ORDER_TYPES[0]);
+      setCity(CITIES[0]);
+      setItems([]);
+    }
+  }, [editSale, visible, products]);
+
+  const handleSave = async () => {
+    if (items.length === 0) {
+      Alert.alert('Validation', 'Please add at least one product.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const totalDiscount = items.reduce((sum, item) => sum + (item.discount || 0), 0);
+      
+      const payload = {
+        type: orderType,
+        city: city,
+        discount_applied: totalDiscount,
+        items: items.map(i => ({
+          product_id: i.product_id,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+        }))
+      };
+      
+      if (isEdit && editSale) {
+        await salesApi.update(editSale.id, payload);
+      } else {
+        await salesApi.create(payload);
+      }
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.detail || 'Failed to save sale');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateItem = (index: number, field: keyof SaleItem, value: number) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setItems(newItems);
+  };
+
+  const removeItem = (index: number) => {
+    setItems(items.filter((_, i) => i !== index));
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+          
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 28, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>{isEdit ? 'Edit Sale' : 'Add Sale'}</Text>
+            <TouchableOpacity onPress={onClose} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
+              <X size={18} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: 20 }} showsVerticalScrollIndicator={false}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563EB', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 14 }}>Sale Details</Text>
+            
+            <InputField label="Date *" value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
+            
+            <View style={{ marginBottom: 14 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>Order Type</Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {ORDER_TYPES.map(type => (
+                  <TouchableOpacity
+                    key={type} onPress={() => setOrderType(type)}
+                    style={{ flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12, borderWidth: 1, backgroundColor: orderType === type ? '#EFF6FF' : '#FFF', borderColor: orderType === type ? '#3B82F6' : '#E2E8F0' }}
+                  >
+                    <Text style={{ fontWeight: orderType === type ? '700' : '500', color: orderType === type ? '#2563EB' : '#64748B', fontSize: 13 }}>{type}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>Location</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
+                {CITIES.map(c => (
+                  <TouchableOpacity
+                    key={c} onPress={() => setCity(c)}
+                    style={{ paddingVertical: 10, paddingHorizontal: 16, marginRight: 10, borderRadius: 20, borderWidth: 1, backgroundColor: city === c ? '#F0FDF4' : '#FFF', borderColor: city === c ? '#22C55E' : '#E2E8F0' }}
+                  >
+                    <Text style={{ fontWeight: city === c ? '700' : '500', color: city === c ? '#16A34A' : '#64748B', fontSize: 13 }}>{c}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, marginTop: 10 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563EB', textTransform: 'uppercase', letterSpacing: 0.8 }}>Products</Text>
+              <TouchableOpacity onPress={() => setProductModalVisible(true)} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                <Plus size={14} color="#2563EB" />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563EB', marginLeft: 4 }}>Select Product</Text>
+              </TouchableOpacity>
+            </View>
+
+            {items.map((item, idx) => (
+              <View key={idx} style={{ marginBottom: 12, backgroundColor: '#FFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 4 }}>{item.product?.name || 'Unknown Product'}</Text>
+                    <Text style={{ fontSize: 12, color: '#64748B' }}>Stock Qty: {item.product ? getTotalStock(item.product) : '-'}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => removeItem(idx)} style={{ padding: 4 }}>
+                    <X size={16} color="#DC2626" />
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 5 }}>Quantity</Text>
+                    <TextInput
+                      value={String(item.quantity)}
+                      onChangeText={v => updateItem(idx, 'quantity', parseInt(v) || 0)}
+                      keyboardType="numeric"
+                      style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14, color: '#0F172A' }}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 5 }}>Discount (₨)</Text>
+                    <TextInput
+                      value={String(item.discount || 0)}
+                      onChangeText={v => updateItem(idx, 'discount', parseFloat(v) || 0)}
+                      keyboardType="numeric"
+                      style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14, color: '#0F172A' }}
+                    />
+                  </View>
+                </View>
+              </View>
+            ))}
+
+            {items.length === 0 && (
+              <View style={{ padding: 24, alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', borderStyle: 'dashed' }}>
+                <Package size={24} color="#CBD5E1" />
+                <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 8 }}>No products added yet</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              onPress={handleSave}
+              disabled={saving}
+              style={{ backgroundColor: '#2563EB', borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginTop: 24, marginBottom: 24, opacity: saving ? 0.7 : 1 }}
+            >
+              {saving ? <ActivityIndicator color="#FFF" /> : <Text style={{ fontSize: 16, fontWeight: '700', color: '#FFF' }}>Save Transaction</Text>}
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+      
+      <ProductSelectionModal 
+        visible={productModalVisible}
+        onClose={() => setProductModalVisible(false)}
+        products={products}
+        onSelect={(p) => {
+          if (!items.find(i => i.product_id === p.id)) {
+            setItems([...items, { product_id: p.id, quantity: 1, unit_price: p.base_price, discount: 0, product: p }]);
+          }
+          setProductModalVisible(false);
+        }}
+      />
+    </Modal>
+  );
+};
+
+// ─── Main Screen ─────────────────────────────────────────────────────────────
+
+const SaleCard = ({ sale, onEdit, onDelete }: { sale: Sale; onEdit: (s: Sale) => void; onDelete: (s: Sale) => void }) => {
+  const totalAmount = sale.total_amount ?? sale.items.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
+  const finalAmount = totalAmount - (sale.discount_applied || 0);
+  const totalItems = sale.items.reduce((sum, item) => sum + item.quantity, 0);
+
+  return (
+    <View style={{ marginBottom: 12, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', padding: 16 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        <View style={{ flex: 1, marginRight: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+              <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B' }}>#{sale.id}</Text>
+            </View>
+            <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+              <Text style={{ fontSize: 10, fontWeight: '600', color: '#2563EB' }}>{sale.type}</Text>
+            </View>
+          </View>
+          <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 4 }}>{sale.city}</Text>
+          <Text style={{ fontSize: 12, color: '#64748B' }}>{totalItems} items · {sale.created_at ? new Date(sale.created_at).toLocaleDateString() : 'Today'}</Text>
+        </View>
+        
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>₨ {finalAmount.toLocaleString()}</Text>
+          {sale.discount_applied > 0 && (
+            <Text style={{ fontSize: 11, color: '#EF4444', marginTop: 2, fontWeight: '600' }}>-₨ {sale.discount_applied}</Text>
+          )}
+        </View>
+      </View>
+      
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 4, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+        <TouchableOpacity onPress={() => onEdit(sale)} style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
+          <Pencil size={14} color="#2563EB" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => onDelete(sale)} style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center' }}>
+          <Trash2 size={14} color="#DC2626" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
 export const SalesScreen = () => {
   const queryClient = useQueryClient();
-  
-  // Form State
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [city, setCity] = useState(CITIES[0]);
-  const [orderType, setOrderType] = useState(ORDER_TYPES[0]);
-  const [quantity, setQuantity] = useState('1');
-  const [discount, setDiscount] = useState('0');
+  const [search, setSearch] = useState('');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editSale, setEditSale] = useState<Sale | null>(null);
 
-  // Fetch Products
-  const { data: productsData, isLoading: isLoadingProducts } = useQuery({
+  const { data: salesData = [], isLoading: isLoadingSales, isRefetching, refetch } = useQuery<Sale[]>({
+    queryKey: ['sales'],
+    queryFn: salesApi.getAll,
+  });
+
+  const { data: productsData = [] } = useQuery<Product[]>({
     queryKey: ['products'],
     queryFn: productsApi.getAll,
   });
 
-  const products = productsData?.items || [];
+  const filtered = useMemo(() => {
+    return salesData.filter(s => {
+      const matchCity = s.city.toLowerCase().includes(search.toLowerCase());
+      const matchId = String(s.id).includes(search);
+      const matchType = s.type.toLowerCase().includes(search.toLowerCase());
+      return matchCity || matchId || matchType;
+    });
+  }, [salesData, search]);
 
-  // Create Sale Mutation
-  const createSaleMutation = useMutation({
-    mutationFn: salesApi.create,
-    onSuccess: () => {
-      Alert.alert('Success', 'Sale recorded successfully!');
-      setQuantity('1');
-      setDiscount('0');
-      setSelectedProduct(null);
-      // Invalidate dashboard and products to reflect inventory drop
-      queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
-      queryClient.invalidateQueries({ queryKey: ['low-stock'] });
-      queryClient.invalidateQueries({ queryKey: ['high-demand'] });
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-    },
-    onError: (err) => {
-      Alert.alert('Error', 'Failed to record sale: ' + err.message);
-    }
-  });
-
-  const handleSubmit = () => {
-    if (!selectedProduct) {
-      Alert.alert('Validation Error', 'Please select a product.');
-      return;
-    }
-    const qty = parseInt(quantity, 10);
-    if (isNaN(qty) || qty <= 0) {
-      Alert.alert('Validation Error', 'Please enter a valid quantity.');
-      return;
-    }
-    
-    const disc = parseFloat(discount);
-    
-    const payload = {
-      type: orderType,
-      city: city,
-      discount_applied: isNaN(disc) ? 0 : disc,
-      items: [
-        {
-          product_id: selectedProduct.id,
-          quantity: qty,
-          unit_price: selectedProduct.base_price,
-        }
-      ]
-    };
-
-    createSaleMutation.mutate(payload);
+  const handleEdit = (sale: Sale) => {
+    setEditSale(sale);
+    setModalVisible(true);
   };
 
-  const InputLabel = ({ title, icon: Icon }: { title: string, icon: any }) => (
-    <View className="flex-row items-center mb-2 mt-6">
-      <Icon size={16} color="#64748B" />
-      <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569', marginLeft: 6 }}>{title}</Text>
-    </View>
-  );
+  const handleDelete = (sale: Sale) => {
+    Alert.alert(
+      'Delete Invoice',
+      `Are you sure you want to delete invoice #${sale.id}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            try {
+              await salesApi.delete(sale.id);
+              queryClient.invalidateQueries({ queryKey: ['sales'] });
+              queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
+            } catch {
+              Alert.alert('Error', 'Failed to delete invoice.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleAddNew = () => {
+    setEditSale(null);
+    setModalVisible(true);
+  };
+
+  const handleSaved = () => {
+    queryClient.invalidateQueries({ queryKey: ['sales'] });
+    queryClient.invalidateQueries({ queryKey: ['products'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
+    queryClient.invalidateQueries({ queryKey: ['low-stock'] });
+    queryClient.invalidateQueries({ queryKey: ['high-demand'] });
+  };
 
   return (
-    <ScreenWrapper>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
-        
-        {/* Header */}
-        <View className="mb-2">
-          <Text style={{ fontSize: 24, fontWeight: '800', color: '#0F172A' }}>Point of Sale</Text>
-          <Text style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>Record live transactions to trigger AI</Text>
+    <ScreenWrapper noPadding>
+      <View style={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 12 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View>
+            <Text style={{ fontSize: 22, fontWeight: '800', color: '#0F172A' }}>Sales</Text>
+            <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>{salesData.length} invoices · Live transactions</Text>
+          </View>
+          <TouchableOpacity
+            onPress={handleAddNew}
+            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#2563EB', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 }}
+          >
+            <Plus size={15} color="#FFF" />
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFF', marginLeft: 6 }}>Add</Text>
+          </TouchableOpacity>
         </View>
+      </View>
 
-        {/* Order Type */}
-        <InputLabel title="Order Type" icon={Store} />
-        <View className="flex-row gap-3">
-          {ORDER_TYPES.map(type => (
-            <TouchableOpacity 
-              key={type} 
-              onPress={() => setOrderType(type)}
-              className="flex-1 py-3 items-center rounded-xl border"
-              style={{ 
-                backgroundColor: orderType === type ? '#EFF6FF' : '#FFFFFF',
-                borderColor: orderType === type ? '#3B82F6' : '#E2E8F0' 
-              }}
-            >
-              <Text style={{ 
-                fontWeight: orderType === type ? '700' : '500', 
-                color: orderType === type ? '#2563EB' : '#64748B' 
-              }}>{type}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* City */}
-        <InputLabel title="Location" icon={MapPin} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
-          {CITIES.map(c => (
-            <TouchableOpacity 
-              key={c} 
-              onPress={() => setCity(c)}
-              className="py-2 px-5 mr-3 rounded-full border"
-              style={{ 
-                backgroundColor: city === c ? '#F0FDF4' : '#FFFFFF',
-                borderColor: city === c ? '#22C55E' : '#E2E8F0' 
-              }}
-            >
-              <Text style={{ 
-                fontWeight: city === c ? '700' : '500', 
-                color: city === c ? '#16A34A' : '#64748B' 
-              }}>{c}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Product */}
-        <InputLabel title="Select Product" icon={Package} />
-        {isLoadingProducts ? (
-          <ActivityIndicator color="#2563EB" className="py-4" />
-        ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
-            {products.map((p: any) => {
-              const isSelected = selectedProduct?.id === p.id;
-              return (
-                <TouchableOpacity 
-                  key={p.id} 
-                  onPress={() => setSelectedProduct(p)}
-                  className="p-4 mr-3 rounded-2xl border"
-                  style={{ 
-                    width: 160,
-                    backgroundColor: isSelected ? '#F8FAFC' : '#FFFFFF',
-                    borderColor: isSelected ? '#0F172A' : '#E2E8F0' 
-                  }}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A', marginBottom: 4 }} numberOfLines={2}>{p.name}</Text>
-                  <Text style={{ fontSize: 12, color: '#64748B' }}>{p.sku}</Text>
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#2563EB', marginTop: 8 }}>Rs {p.base_price}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+      <View style={{ marginHorizontal: 20, marginBottom: 16, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+        <Search size={15} color="#94A3B8" />
+        <TextInput
+          style={{ flex: 1, paddingVertical: 11, marginLeft: 8, fontSize: 13, color: '#0F172A' }}
+          placeholder="Search invoices by ID, city or type..."
+          placeholderTextColor="#94A3B8"
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch('')}>
+            <X size={14} color="#94A3B8" />
+          </TouchableOpacity>
         )}
+      </View>
 
-        {/* Quantity & Discount */}
-        <View className="flex-row gap-4">
-          <View className="flex-1">
-            <InputLabel title="Quantity" icon={ShoppingCart} />
-            <TextInput 
-              className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-base text-slate-800"
-              keyboardType="number-pad"
-              value={quantity}
-              onChangeText={setQuantity}
-            />
-          </View>
-          <View className="flex-1">
-            <InputLabel title="Discount (Rs)" icon={Tag} />
-            <TextInput 
-              className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-base text-slate-800"
-              keyboardType="numeric"
-              value={discount}
-              onChangeText={setDiscount}
-              placeholder="0.00"
-            />
-          </View>
+      {isLoadingSales ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator color="#2563EB" size="large" />
+          <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 10 }}>Loading invoices...</Text>
         </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={item => item.id.toString()}
+          renderItem={({ item }) => <SaleCard sale={item} onEdit={handleEdit} onDelete={handleDelete} />}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#2563EB" />}
+          ListEmptyComponent={
+            <NoData message={search ? 'Try adjusting your search' : 'No sales invoices recorded yet'} />
+          }
+        />
+      )}
 
-        {/* Summary & Submit */}
-        {selectedProduct && (
-          <View className="mt-8 p-5 bg-slate-50 rounded-2xl border border-slate-200">
-            <View className="flex-row justify-between mb-2">
-              <Text style={{ fontSize: 14, color: '#64748B' }}>Subtotal:</Text>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#0F172A' }}>
-                Rs {(selectedProduct.base_price * (parseInt(quantity) || 0)).toLocaleString()}
-              </Text>
-            </View>
-            <View className="flex-row justify-between mb-4 pb-4 border-b border-slate-200">
-              <Text style={{ fontSize: 14, color: '#64748B' }}>Discount:</Text>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#EF4444' }}>
-                - Rs {parseFloat(discount) || 0}
-              </Text>
-            </View>
-            <View className="flex-row justify-between mb-6">
-              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Total:</Text>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: '#2563EB' }}>
-                Rs {Math.max(0, (selectedProduct.base_price * (parseInt(quantity) || 0)) - (parseFloat(discount) || 0)).toLocaleString()}
-              </Text>
-            </View>
-
-            <TouchableOpacity 
-              onPress={handleSubmit}
-              disabled={createSaleMutation.isPending}
-              className="bg-blue-600 rounded-xl py-4 flex-row justify-center items-center"
-              style={{ opacity: createSaleMutation.isPending ? 0.7 : 1 }}
-            >
-              {createSaleMutation.isPending ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text style={{ fontSize: 16, fontWeight: '700', color: 'white' }}>Complete Transaction</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-
-      </ScrollView>
+      <SalesFormModal
+        visible={modalVisible}
+        onClose={() => { setModalVisible(false); setEditSale(null); }}
+        editSale={editSale}
+        onSaved={handleSaved}
+        products={productsData}
+      />
     </ScreenWrapper>
   );
 };
